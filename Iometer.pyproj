@@ -19,7 +19,14 @@
     <VisualStudioVersion Condition=" '$(VisualStudioVersion)' == '' ">10.0</VisualStudioVersion>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="DiskTargetSelection.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="FMS_2018_QPS.py" />
+    <Compile Include="IometerAutomation.py">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="ModuleSelection.py" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
 </Project>
