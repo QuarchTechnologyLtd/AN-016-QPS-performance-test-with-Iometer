@@ -12,7 +12,7 @@ from quarchpy import quarchDevice, quarchQPS, qpsInterface
 def GetQpsModuleSelection (QpsConnection):
     
     # Request a list of all USB and LAN accessible power modules
-    devList = myQps.getDeviceList()
+    devList = QpsConnection.getDeviceList()
 
     # Print the devices, so the user can choose one to connect to
     print ("\n ########## STEP 1 - Select a Quarch Module. ########## \n")
@@ -31,7 +31,7 @@ def GetQpsModuleSelection (QpsConnection):
         moduleId = int(input ("\n>>> Enter the index of the Quarch module: "))
 
     # Verify the selection
-    if (moduleId > 0 and moduleId < devList.Length):
+    if (moduleId > 0 and moduleId < len(devList)):
         myDeviceID = devList[moduleId-1]
     else:
         myDeviceID = None

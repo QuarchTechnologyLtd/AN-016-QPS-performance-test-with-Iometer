@@ -8,6 +8,12 @@ This contains useful functions to help with disk target selection
 '''
 
 from quarchpy import quarchDevice, quarchQPS, qpsInterface
+import wmi
+import re
+import win32file, win32api
+from subprocess import check_output
+import sys
+import os
 
 def GetDiskTargetSelection ():
     # Get available physical disks
@@ -34,8 +40,8 @@ def GetDiskTargetSelection ():
         drive_index = int(input("\n>>> Enter the index of the target device: ")) - 1
 
     # Verify the selection
-    if (drive_index > 0 and drive_index < deviceList.Length):
-        myDeviceID = deviceList[myDeviceID-1]
+    if (drive_index > 0 and drive_index < len(deviceList)):
+        myDeviceID = deviceList[drive_index]
     else:
         myDeviceID = None
 

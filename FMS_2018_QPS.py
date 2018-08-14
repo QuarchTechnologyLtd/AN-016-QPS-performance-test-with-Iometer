@@ -26,11 +26,11 @@ from __future__ import division
 from sys import argv
 
 import time
-#import serial
-import sys
 import signal
 import datetime
 from time import mktime
+import multiprocessing as mp
+from multiprocessing import Pipe
 
 try:
     # for Python 2.x
@@ -41,14 +41,10 @@ except ImportError:
 
 import os
 import shutil
-import subprocess
-import re
-import csv
-import threading
-import multiprocessing as mp
-from multiprocessing import Pipe
+
+
+
 import math
-import wmi
 import re
 import mmap
 
@@ -59,11 +55,26 @@ except ImportError:
     # for Python 3.x
     from io import StringIO
 
-#Import for getAvailableDrives function
-import win32file, win32api
-from subprocess import check_output
 
 from quarchpy import quarchDevice, quarchQPS, isQpsRunning, startLocalQps, closeQPS, qpsInterface
+
+#TODO: Move these to quarchpy package and fix the names to the same case/format
+from DiskTargetSelection import GetDiskTargetSelection
+from ModuleSelection import GetQpsModuleSelection
+from IometerAutomation import runIOMeter, processIometerInstResults, adjustTime
+
+#TODO: This should move to quarchpy
+import pkg_resources
+import re
+def versionCompare(version1, version2):
+    def normalize(v):
+        return [int(x) for x in re.sub(r'(\.0+)*$','', v).split(".")]
+    return cmp(normalize(version1), normalize(version2))
+def getQuarchPyVersion ():
+    return pkg_resources.get_distribution("quarchpy").version
+def checkQuarchpyVersion (requiredVersion):
+    return versionCompare (requiredVersion, getQuarchPyVersion())
+#/TODO:
 
 filePath = os.path.dirname(os.path.realpath(__file__))
 
@@ -72,6 +83,18 @@ The main function sets up the tests and then invokes Iometer, QPS and the result
 the data back from the IOmeter results file
 '''
 def main():
+        
+        # Setup the callback dictionary, used later to notify us of data needing processed.
+        # If you don't want to implement all the functions, just delete the relevant item
+        iometerCallbacks = {
+            "TEST_START": notifyTestStart,
+            "TEST_END": notifyTestEnd,
+            "TEST_RESULT": notifyTestPoint,
+        }
+
+        # Check that the installed version of quarchpy is at the required minimum level
+        if (checkQuarchpyVersion ("1.5") > 0):
+            raise ValueError ("quarchpy reported version is not new enough for this script!")
 
         # Display title text
         print ("\n################################################################################")
@@ -87,10 +110,14 @@ def main():
         # Checks is QPS is running on the localhost
         if not isQpsRunning():
             # Start the version on QPS installed with the quarchpy, Otherwise use the running version
+            # TODO: This needs to poll with QIS STATUS command and not return until QIS is up and running (rather than a fixed delay)
+            # TODO: Add a parameter keepQisRunning=TRUE, such that QIS is opened first, and detached from the console to it stays open after QPS closes
             startLocalQps()
+            # TODO: Remove this additional delay
+            time.sleep(5)
 
         # Open an interface to local QPS
-        myQps = qpsInterface()        
+        myQps = qpsInterface()
 
         # Get the user to select the module to work with
         myDeviceID = GetQpsModuleSelection (myQps)
@@ -101,12 +128,13 @@ def main():
         myQpsDevice = quarchQPS(myQuarchDevice)
         myQpsDevice.openConnection()
 
-        # Prints out connected module information
-        print ("\n MODULE: " + myQpsDevice.sendCommand ("hello?")) 
-        print (" SERIAL: " + myQpsDevice.sendCommand ("*enclosure?"))
+        # Prints out connected module information        
+        print ("MODULE CONNECTED: \n" + myQpsDevice.sendCommand ("*idn?"))
 
         # Setup the voltage mode and enable the outputs
         setupPowerOutput (myQpsDevice)
+        # Sleep for a few seconds to let the drive target enumerate
+        time.sleep(5)
 
         '''
         *****
@@ -135,12 +163,12 @@ def main():
 
         # Start a stream, using the local folder of the script and a time-stamp file name in this example
         fileName = time.strftime("%Y-%m-%d-%H-%M-%S", time.gmtime())        
-        main.myStream = myQpsDevice.startStream (filePath + fileName)
+        myStream = myQpsDevice.startStream (filePath + fileName)
 
         # Create new custom channels to plot IO results
-        main.myStream.createChannel ('I/O', 'IOPS', 'IOPS', "Yes")
-        main.myStream.createChannel ('Data', 'Data', 'Bytes', "Yes")
-        main.myStream.createChannel ('Response', 'Response', 'us', "Yes")
+        myStream.createChannel ('I/O', 'IOPS', 'IOPS', "Yes")
+        myStream.createChannel ('Data', 'Data', 'Bytes', "Yes")
+        myStream.createChannel ('Response', 'Response', 'mS', "No")
         
         # Delete any old output files
         if os.path.exists("testfile.csv"):
@@ -152,13 +180,13 @@ def main():
         confDir = os.getcwd() + '\conf'        
           
         # Execute every ICF file in sequence and process them
-        executeIometerFolderIteration (confDir)
+        executeIometerFolderIteration (confDir, myStream, iometerCallbacks)
 
         # TODO: Add an option to parse a .csv file with IOmeter options inside, and use this to generate full .ICF files
 
         # End the stream after a few seconds of idle
         time.sleep(5)
-        main.myStream.stopStream()
+        myStream.stopStream()
         
         #sys.exit ()        
      
@@ -166,13 +194,14 @@ def main():
 '''
 Executes a group of .ICF files in the given folder and processes the results into the current stream
 '''
-def executeIometerFolderIteration (confDir, myStream):
+def executeIometerFolderIteration (confDir, myStream, userCallbacks):
     skipFileLines = 0
         
     for file in os.listdir(confDir):
         if file.endswith(".icf"):
                 
             icfFilePath = os.path.join(confDir, file)
+            icfFilePath = "\"" + icfFilePath + "\""
 
             # Start up IOmeter and the results parser
             threadIometer = mp.Process(target=runIOMeter, args = (icfFilePath,))
@@ -180,33 +209,16 @@ def executeIometerFolderIteration (confDir, myStream):
             # Start both threads. 
             threadIometer.start()
 
-            skipFileLines = processIometerInstResults(file, skipFileLines, myStream)
+            skipFileLines = processIometerInstResults(file, skipFileLines, myStream, userCallbacks)
                 
             # Wait for threads to complete
             threadIometer.join()
 
             time.sleep(5)
-
-'''
-Run to add the start point of a test run.  Adds an annotation to the chart
-'''
-def notifyTestStart (timeStamp, testName):
-    return Null
-
-'''
-Run to add the end point of a test run.  Adds an annotation to the chart and 
-ends the current block of performance data
-'''
-def notifyTestEnd (timeStamp, testName):
-    return Null
-
-'''
-Run for each test point to be added to the chart
-'''
-def notifyTestPoint (timeStamp, dataValue):
-    return Null
          
-
+'''
+Function to check the output state of the module and prompt to select an output mode if not set already
+'''
 def setupPowerOutput (myModule):
 
     # Output mode is set automatically on HD modules using an HD fixture, otherwise we will chose 5V mode for this example
@@ -224,6 +236,46 @@ def setupPowerOutput (myModule):
     if "OFF" in powerState:
         # Power Up
         print ("\n Turning the outputs on:"), myModule.sendCommand ("run:power up"), "!"
+
+
+'''
+*****
+The following functions are callbacks from the Iometer parsing code, notifying us of new actions or data, so we can
+act on it in a custom way (generally adding it to the QPS chart)
+*****
+'''
+
+'''
+Callback: Run to add the start point of a test run.  Adds an annotation to the chart
+'''
+def notifyTestStart (myStream, timeStamp, testDescription):
+    myStream.addAnnotation(testDescription + "\\n TEST STARTED", adjustTime(timeStamp))
+
+'''
+Callback: Run to add the end point of a test run.  Adds an annotation to the chart and 
+ends the current block of performance data
+'''
+def notifyTestEnd (myStream, timeStamp, testName):
+    # Add an end annotation
+    myStream.addAnnotation("END", adjustTime(timeStamp))
+    # Terminate the sequence of user data just after the current time, to avoid spanning the chart across the idle area
+    myStream.addDataPoint('I/O', 'IOPS', "endSeq", adjustTime(timeStamp)+0.01)
+    myStream.addDataPoint('Data', 'Data', "endSeq", adjustTime(timeStamp)+0.01)
+    myStream.addDataPoint('Response', 'Response', "endSeq", adjustTime(timeStamp)+0.01)
+
+'''
+Callback: Run for each test point to be added to the chart
+'''
+def notifyTestPoint (myStream, timeStamp, dataValues):
+    # Add each custom data point that has been passed through
+    # TODO: adjustTime should not be needed here!  All times in out python code should be standard python time stamps.  Any conversion should be done at source (reading from Iometer) or output (sendint the final command to the module)
+    if (dataValues.has_key ("IOPS")):
+        myStream.addDataPoint('I/O', 'IOPS', dataValues["IOPS"], adjustTime(timeStamp))
+    if (dataValues.has_key ("DATA_RATE")):
+        myStream.addDataPoint('Data', 'Data', dataValues["DATA_RATE"], adjustTime(timeStamp))
+    if (dataValues.has_key ("RESPONSE_TIME")):
+        myStream.addDataPoint('Response', 'Response', dataValues["RESPONSE_TIME"], adjustTime(timeStamp))    
+
 
 
 # Calling the main () function

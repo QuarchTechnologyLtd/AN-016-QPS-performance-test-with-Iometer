@@ -11,6 +11,26 @@ This contains useful functions for Iometer automation with Quarch tools
 This function is normally called in a seperate thread and runs the Iometer process, using the given file name to
 describe the tests to be carried out
 '''
+
+import time
+import os
+import subprocess
+import threading
+import multiprocessing as mp
+from multiprocessing import Pipe
+import csv
+import datetime
+
+try:
+    # for Python 2.x
+    from StringIO import StringIO
+except ImportError:
+    # for Python 3.x
+    from io import StringIO
+
+'''
+Executes iometer within a seperate thread sub-process
+'''
 def runIOMeter(fileName):
 
     time.sleep(1)
@@ -50,10 +70,7 @@ processes it into QPS, adding annotationsa and custom channel data points as nee
 
 This currently assumes that custom channels have been created for IOPS, Data and Response
 '''
-def processIometerInstResults(testName, skipFileLines, myStream):
-	
-    driveSpeed = ""
-    fileSection = 0
+def processIometerInstResults(testName, skipFileLines, myStream, userCallbacks):    
         
     # Wait for the file to exist
     while(os.path.isfile("insttestfile.csv") == False): pass
@@ -63,11 +80,21 @@ def processIometerInstResults(testName, skipFileLines, myStream):
     # Attach the file iterator
     resultsIterator = followResultsFile (resultsFile)
     
+    driveSpeed = ""
+    fileSection = 0
     lineCount = 0
-    lineCount2 = 0
-    #average data across points
+    lineCount2 = 0    
     sum_all_threads1 = 0
     sum_all_threads2 = 0
+    sum_all_threads3 = 0
+    testDescrip = "Undescribed Test"
+    workerCount = 99999
+    workerList = []
+    resultsMap = {
+        "IOPS": 0,
+        "RATE": 0,
+        "RESPONSE": 0,
+    }
     
     for dataLine in resultsIterator:
         f = StringIO (dataLine.decode ('utf-8'))
@@ -79,6 +106,11 @@ def processIometerInstResults(testName, skipFileLines, myStream):
         skipFileLines = skipFileLines + 1
 
         csvData = list(csv.reader (f))
+
+        # Get the test description if there is one
+        if (lineCount == 2):
+           if (csvData[0][1] != ""):
+               testDescrip = csvData[0][1]
         
         if (fileSection == 0 and csvData[0][0] != '\'Time Stamp'):            
             continue
@@ -89,8 +121,9 @@ def processIometerInstResults(testName, skipFileLines, myStream):
         if (fileSection == 1):            
             timeStamp =  csvData[0][0]
                      
-            myStream.addAnnotation(testAnnotation + "\\n TEST STARTED", adjustTime(timeStamp))
-
+            if (userCallbacks.has_key("TEST_START")):
+                userCallbacks["TEST_START"](myStream, timeStamp, testDescrip)
+            
             fileSection = 2
             continue        
 
@@ -102,26 +135,61 @@ def processIometerInstResults(testName, skipFileLines, myStream):
 
         if (fileSection == 3):
             lineCount2 += 1
+            prevTimeStamp = timeStamp
             timeStamp =  csvData[0][0]
             if (timeStamp == '\'Time Stamp'):
                 fileSection = 4
                 continue
+
+            # Track the workers we have seen (add up until we see the same worker again)
+            if (workerCount == 99999):
+                if (workerList.__contains__ (csvData[0][2]) == False):
+                    workerList.append (csvData[0][2])
+                else:
+                    # Store worker count
+                    workerCount = len(workerList)
+
+                    # Get Data in correct units for QPS
+                    sum_all_threads2 = sum_all_threads2*1000000
+                    sum_all_threads3 = sum_all_threads3 / workerCount
+
+                    # Process the current result
+                    resultsMap["IOPS"] = sum_all_threads1
+                    resultsMap["DATA_RATE"] = sum_all_threads2
+                    resultsMap["RESPONSE_TIME"] = sum_all_threads3
+                    if (userCallbacks.has_key("TEST_RESULT")):
+                        userCallbacks["TEST_RESULT"] (myStream, prevTimeStamp, resultsMap)                    
+                
+                    sum_all_threads1 = 0
+                    sum_all_threads2 = 0
+                    sum_all_threads3 = 0
+
+            # Sum up the values from each worker
             dataValue1 = csvData[0][7]
             dataValue2 = csvData[0][13]
-            
+            dataValue3 = csvData[0][18]            
             sum_all_threads1 += float(dataValue1)
             sum_all_threads2 += float(dataValue2)
+            sum_all_threads3 += float(dataValue3)
             
-            if (lineCount2 % 8 == 0):
+            if (lineCount2 % workerCount == 0):
                 
-                sum_all_threads1 = sum_all_threads1
+                # Get Data in correct units for QPS
                 sum_all_threads2 = sum_all_threads2*1000000
+                sum_all_threads3 = sum_all_threads3 / workerCount
 
-                myStream.addDataPoint('I/O', 'IOPS', sum_all_threads1, adjustTime(timeStamp))
-                myStream.addDataPoint('Data', 'Data', sum_all_threads2, adjustTime(timeStamp))
+                resultsMap["IOPS"] = sum_all_threads1
+                resultsMap["DATA_RATE"] = sum_all_threads2
+                resultsMap["RESPONSE_TIME"] = sum_all_threads3
+                if (userCallbacks.has_key("TEST_RESULT")):
+                        userCallbacks["TEST_RESULT"] (myStream, prevTimeStamp, resultsMap)
+                #myStream.addDataPoint('I/O', 'IOPS', sum_all_threads1, adjustTime(timeStamp))
+                #myStream.addDataPoint('Data', 'Data', sum_all_threads2, adjustTime(timeStamp))
+                #myStream.addDataPoint('Response', 'Response', sum_all_threads3, adjustTime(timeStamp))
                 
                 sum_all_threads1 = 0
                 sum_all_threads2 = 0
+                sum_all_threads3 = 0
                 
             #print ('LOG ' + timeStamp + " " + dataValue)
             #myStream.addDataPoint('I/O-1', 'SpeedIO', dataValue1, adjustTime(timeStamp))
@@ -129,11 +197,8 @@ def processIometerInstResults(testName, skipFileLines, myStream):
 
         if (fileSection == 4):
             timeStamp =  csvData[0][0]
-            myStream.addAnnotation("TEST\\nENDED", adjustTime(timeStamp))
-            myStream.addDataPoint('I/O', 'IOPS', "endSeq", adjustTime(timeStamp)+0.01)
-            myStream.addDataPoint('Data', 'Data', "endSeq", adjustTime(timeStamp)+0.01)
-            # TODO: Add the response channel
-            # TODO: This should not be hardcoded here... we should be calling the  script level notifyXXXX functions by some means to the script can be easily tweaked (ask chris maybe?)
+            if (userCallbacks.has_key("TEST_END")):
+                userCallbacks["TEST_END"](myStream, timeStamp, testDescrip)
             
             #print ("TEST ENDED AT " + timeStamp)
             resultsFile.close ()               
