@@ -20,6 +20,7 @@ import multiprocessing as mp
 from multiprocessing import Pipe
 import csv
 import datetime
+import socket
 
 try:
     # for Python 2.x
@@ -204,3 +205,58 @@ def processIometerInstResults(testName, skipFileLines, myStream, userCallbacks):
             resultsFile.close ()               
             
             return skipFileLines
+			
+'''
+Scans the given path for .conf files (ioMeter template files) and
+creates .icf files with the correct host and drive target information in place
+'''
+def generateIcfFromConf(confPath, driveInfo, managerName=socket.gethostname()):
+
+    configFiles = []
+    fileCount = 0
+    
+    config_list = []
+    
+    # Scan through .conf files
+    for file in os.listdir(confPath):
+        if file.endswith(".conf"):
+        
+            confFilePath = os.path.join(confPath, file)
+            icfFilePath = confFilePath.replace ('.conf', '.icf')
+
+            # Delete any old icf file with the same name
+            if os.path.exists(icfFilePath):
+                os.remove(icfFilePath)        
+
+            # Open the .conf file
+            openFile = open (confFilePath)
+            fileData = openFile.read ()
+            openFile.close ()
+   
+            # Create the string modifications needed to set the correct target
+            newStr = "\t" + str(driveInfo["PHYSICALDRIVE"]) +  ": \"" + str(driveInfo["NAME"]) + " " + str(driveInfo["FW_REV"]) + "\"" + "\n"
+            oldStr = "[*TARGET*]"
+            # Replace the string
+            fileData = fileData.replace(str(oldStr),str(newStr))
+			
+			# Create the string modification to set the manager name
+			newStr = "\t" + managerName + "\n"
+            oldStr = "[*MANAGER*]"
+			fileData = fileData.replace(str(oldStr),str(newStr))
+
+            # Write the text out to the final ICF file
+            openFile = open (icfFilePath, 'a+')
+            openFile.write (fileData)
+
+            s = mmap.mmap(openFile.fileno(), 0, access=mmap.ACCESS_READ)
+            pos_start = s.find('Assigned access specs')
+            pos_end = s.find('End assigned access specs')
+            if pos_start != -1:
+                config_list.append(s[pos_start+21:pos_end-1])
+
+            openFile.close ()
+            
+            # Increment file counter
+            fileCount = fileCount + 1
+
+    return fileCount, config_list
