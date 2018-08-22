@@ -15,7 +15,7 @@ This example uses IOMeter and QPS to run traffic tests to a drive, with the powe
 ########### INSTRUCTIONS ###########
 
 1- Connect a Quarch power module to your PC via USB or LAN
-2- Install quarchpy, wmi and pywin32
+2- Install quarchpy, wmi (https://github.com/mhammond/pywin32/releases) and pywin32
 3- On startup, select the drive you wish to test
 
 ####################################
@@ -42,8 +42,6 @@ except ImportError:
 import os
 import shutil
 
-
-
 import math
 import re
 import mmap
@@ -55,26 +53,7 @@ except ImportError:
     # for Python 3.x
     from io import StringIO
 
-
-from quarchpy import quarchDevice, quarchQPS, isQpsRunning, startLocalQps, closeQPS, qpsInterface
-
-#TODO: Move these to quarchpy package and fix the names to the same case/format
-from DiskTargetSelection import GetDiskTargetSelection
-from ModuleSelection import GetQpsModuleSelection
-from IometerAutomation import runIOMeter, processIometerInstResults, adjustTime
-
-#TODO: This should move to quarchpy
-import pkg_resources
-import re
-def versionCompare(version1, version2):
-    def normalize(v):
-        return [int(x) for x in re.sub(r'(\.0+)*$','', v).split(".")]
-    return cmp(normalize(version1), normalize(version2))
-def getQuarchPyVersion ():
-    return pkg_resources.get_distribution("quarchpy").version
-def checkQuarchpyVersion (requiredVersion):
-    return versionCompare (requiredVersion, getQuarchPyVersion())
-#/TODO:
+from quarchpy import generateIcfFromCsvLineData, readIcfCsvLineData, requiredQuarchpyVersion, generateIcfFromConf, quarchDevice, quarchQPS, isQpsRunning, startLocalQps, closeQPS, qpsInterface, GetDiskTargetSelection, GetQpsModuleSelection, runIOMeter, processIometerInstResults, adjustTime
 
 filePath = os.path.dirname(os.path.realpath(__file__))
 
@@ -93,7 +72,7 @@ def main():
         }
 
         # Check that the installed version of quarchpy is at the required minimum level
-        if (checkQuarchpyVersion ("1.5") > 0):
+        if not requiredQuarchpyVersion ("1.3.4"):
             raise ValueError ("quarchpy reported version is not new enough for this script!")
 
         # Display title text
@@ -101,7 +80,7 @@ def main():
         print ("\n                           QUARCH TECHNOLOGY                        \n\n  ")
         print ("Automated power and performance data acquisition with Quarch Power Studio.   ")
         print ("\n################################################################################\n")        
-    
+
         '''
         *****
         First we activate QIS and prompt the user to select a power module
@@ -109,12 +88,8 @@ def main():
         '''
         # Checks is QPS is running on the localhost
         if not isQpsRunning():
-            # Start the version on QPS installed with the quarchpy, Otherwise use the running version
-            # TODO: This needs to poll with QIS STATUS command and not return until QIS is up and running (rather than a fixed delay)
-            # TODO: Add a parameter keepQisRunning=TRUE, such that QIS is opened first, and detached from the console to it stays open after QPS closes
-            startLocalQps()
-            # TODO: Remove this additional delay
-            time.sleep(5)
+            # Start the version on QPS installed with the quarchpy, otherwise use the running version
+            startLocalQps(keepQisRunning=True)
 
         # Open an interface to local QPS
         myQps = qpsInterface()
@@ -135,7 +110,7 @@ def main():
         setupPowerOutput (myQpsDevice)
         # Sleep for a few seconds to let the drive target enumerate
         time.sleep(5)
-
+        
         '''
         *****
         Get the user to select a valid target drive
@@ -143,15 +118,14 @@ def main():
         '''
         targetInfo = GetDiskTargetSelection ()               
         
-        print ("\n TARGET DEVICE: " + targetInfo[0])
-        print (" VOLUME: " + targetInfo[1])
-
+        print ("\n TARGET DEVICE: " + targetInfo["NAME"])
+        print (" VOLUME: " + targetInfo["DRIVE"])
+        
         '''
         *****
         Setup and begin streaming
         *****
         '''
-        
         # Get the required averaging rate from the user.  This sets the resolution of data to record        
         try:
             averaging = raw_input ("\n>>> Enter the average rate [32k]: ") or "32k"
@@ -177,19 +151,22 @@ def main():
             os.remove("insttestfile.csv")
 
         # If .icf files are found in the test configuration folder, to describe the test to run
-        confDir = os.getcwd() + '\conf'        
-          
+        confDir = os.getcwd() + '\conf'       
+            
+        #generateIcfFromConf(confDir, targetInfo)
+        
+        csvData = readIcfCsvLineData("C:\Users\pleao\Desktop\quarchpy\csv_example.csv", 9)
+        
+        icfFilePath = confDir + "\\" + "test001.icf"
+        generateIcfFromCsvLineData(csvData, icfFilePath, targetInfo)
+        
         # Execute every ICF file in sequence and process them
         executeIometerFolderIteration (confDir, myStream, iometerCallbacks)
-
-        # TODO: Add an option to parse a .csv file with IOmeter options inside, and use this to generate full .ICF files
 
         # End the stream after a few seconds of idle
         time.sleep(5)
         myStream.stopStream()
-        
-        #sys.exit ()        
-     
+   
  
 '''
 Executes a group of .ICF files in the given folder and processes the results into the current stream
@@ -277,11 +254,11 @@ def notifyTestPoint (myStream, timeStamp, dataValues):
         myStream.addDataPoint('Response', 'Response', dataValues["RESPONSE_TIME"], adjustTime(timeStamp))    
 
 
-
 # Calling the main () function
 if __name__=="__main__":
     main()
 
+    
 
 
 
@@ -291,3 +268,48 @@ if __name__=="__main__":
 
 
 
+
+
+'''
+
+def getAvailableDisks (hostDrive):
+    driveList = []
+    driveInfo = {
+        "NAME": None,
+        "DRIVE": None,
+        "FW_REV": None,
+        }
+
+    diskNum = 0
+
+    diskScan = wmi.WMI()
+
+    # Loop through disks
+    for disk in diskScan.Win32_diskdrive(["Caption", "DeviceID", "FirmwareRevision"]):        
+        DiskInfo= str(disk)
+                
+        # Try to get the disk caption
+        DiskInfo.strip()
+        a = re.search('Caption = "(.+?)";', DiskInfo)    
+        if a:
+            diskName = a.group(1)
+           
+        # Try to get the disk ID
+        b = re.search('DRIVE(.+?)";', DiskInfo)
+        if b:
+            diskId = b.group(1)         
+        # Try to get the disk FW
+        c = re.search('FirmwareRevision = "(.+?)";', DiskInfo)
+        if c:
+            diskFw = c.group(1)           
+
+        # Skip if this is our host drive!
+        if (diskName != hostDrive):
+            # Append drive info to array
+            driveInfo.update(dict(zip(['NAME','DRIVE','FW_REV'], [diskName, diskId, diskFw])))
+            driveList.append(driveInfo)
+
+    # Return the list of drives
+    return driveList
+
+'''
