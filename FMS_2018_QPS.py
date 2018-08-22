@@ -121,6 +121,29 @@ def main():
         print ("\n TARGET DEVICE: " + targetInfo["NAME"])
         print (" VOLUME: " + targetInfo["DRIVE"])
         
+        # Run from CSV settings or all the files in /conf        
+        try:
+            run_option = raw_input ("\n1 - Use settings in CSV file\n2 - Run all files in /conf\n>>> Please select a mode: ")
+        except NameError:
+            run_option = input ("\n1 - Use settings in CSV file\n2 - Run all files in /conf\n>>> Please select a mode: ")
+        
+        if "1" in run_option:
+            keepReading = True
+            count = 1
+            confDir = os.getcwd() + "\\temp_conf"
+            os.makedirs(confDir)
+            while 1:
+                csvData, keepReading = readIcfCsvLineData("csv_example.csv", count)
+                if not keepReading:
+                    break
+                icfFilePath = confDir + "\\" + "file" + str(count) + ".icf"
+                generateIcfFromCsvLineData(csvData, icfFilePath, targetInfo)
+                count += 1
+               
+        if "2" in run_option:
+            confDir = os.getcwd() + "\\conf"
+            generateIcfFromConf(confDir, targetInfo)
+
         '''
         *****
         Setup and begin streaming
@@ -150,19 +173,11 @@ def main():
         if os.path.exists("insttestfile.csv"):
             os.remove("insttestfile.csv")
 
-        # If .icf files are found in the test configuration folder, to describe the test to run
-        confDir = os.getcwd() + '\conf'       
-            
-        #generateIcfFromConf(confDir, targetInfo)
-        
-        csvData = readIcfCsvLineData("C:\Users\pleao\Desktop\quarchpy\csv_example.csv", 9)
-        
-        icfFilePath = confDir + "\\" + "test001.icf"
-        generateIcfFromCsvLineData(csvData, icfFilePath, targetInfo)
-        
-        # Execute every ICF file in sequence and process them
+        # Execute every ICF file in sequence and process them. Deletes any temporary ICF
         executeIometerFolderIteration (confDir, myStream, iometerCallbacks)
-
+        if "temp_conf" in confDir:
+            shutil.rmtree(confDir)
+        
         # End the stream after a few seconds of idle
         time.sleep(5)
         myStream.stopStream()
@@ -257,59 +272,3 @@ def notifyTestPoint (myStream, timeStamp, dataValues):
 # Calling the main () function
 if __name__=="__main__":
     main()
-
-    
-
-
-
-
-
-
-
-
-
-
-
-'''
-
-def getAvailableDisks (hostDrive):
-    driveList = []
-    driveInfo = {
-        "NAME": None,
-        "DRIVE": None,
-        "FW_REV": None,
-        }
-
-    diskNum = 0
-
-    diskScan = wmi.WMI()
-
-    # Loop through disks
-    for disk in diskScan.Win32_diskdrive(["Caption", "DeviceID", "FirmwareRevision"]):        
-        DiskInfo= str(disk)
-                
-        # Try to get the disk caption
-        DiskInfo.strip()
-        a = re.search('Caption = "(.+?)";', DiskInfo)    
-        if a:
-            diskName = a.group(1)
-           
-        # Try to get the disk ID
-        b = re.search('DRIVE(.+?)";', DiskInfo)
-        if b:
-            diskId = b.group(1)         
-        # Try to get the disk FW
-        c = re.search('FirmwareRevision = "(.+?)";', DiskInfo)
-        if c:
-            diskFw = c.group(1)           
-
-        # Skip if this is our host drive!
-        if (diskName != hostDrive):
-            # Append drive info to array
-            driveInfo.update(dict(zip(['NAME','DRIVE','FW_REV'], [diskName, diskId, diskFw])))
-            driveList.append(driveInfo)
-
-    # Return the list of drives
-    return driveList
-
-'''
