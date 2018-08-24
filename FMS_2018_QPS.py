@@ -181,7 +181,8 @@ def main():
         # Deletes temporary files
         try:
             for tempFile in tempList:
-                os.remove(tempFile) 
+        #        os.remove(tempFile)
+                 pass 
         except NameError:
             pass
         
@@ -198,7 +199,11 @@ def executeIometerFolderIteration (confDir, myStream, userCallbacks):
         
     for file in os.listdir(confDir):
         if file.endswith(".icf"):
-                
+            try:
+                os.remove("insttestfile.csv")
+            except OSError:
+                pass
+
             icfFilePath = os.path.join(confDir, file)
             icfFilePath = "\"" + icfFilePath + "\""
 
@@ -208,7 +213,7 @@ def executeIometerFolderIteration (confDir, myStream, userCallbacks):
             # Start both threads. 
             threadIometer.start()
 
-            skipFileLines = processIometerInstResults(file, skipFileLines, myStream, userCallbacks)
+            processIometerInstResults(file, myStream, userCallbacks)
                 
             # Wait for threads to complete
             threadIometer.join()
