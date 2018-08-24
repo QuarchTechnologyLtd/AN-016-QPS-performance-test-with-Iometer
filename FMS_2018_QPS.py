@@ -89,7 +89,7 @@ def main():
         # Checks is QPS is running on the localhost
         if not isQpsRunning():
             # Start the version on QPS installed with the quarchpy, otherwise use the running version
-            startLocalQps(keepQisRunning=True)
+            startLocalQps()
 
         # Open an interface to local QPS
         myQps = qpsInterface()
