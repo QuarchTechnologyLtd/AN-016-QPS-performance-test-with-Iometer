@@ -130,13 +130,15 @@ def main():
         if "1" in run_option:
             keepReading = True
             count = 1
-            confDir = os.getcwd() + "\\temp_conf"
-            os.makedirs(confDir)
+            confDir = os.getcwd() + "\\conf\\temp_conf"
+            tempList = []
             while 1:
                 csvData, keepReading = readIcfCsvLineData("csv_example.csv", count)
                 if not keepReading:
                     break
-                icfFilePath = confDir + "\\" + "file" + str(count) + ".icf"
+                timeStamp = time.strftime("%Y-%m-%d-%H-%M-%S", time.gmtime())        
+                icfFilePath = confDir + "\\" + "file" + str(count) +"_"+ timeStamp + ".icf"
+                tempList.append(icfFilePath)
                 generateIcfFromCsvLineData(csvData, icfFilePath, targetInfo)
                 count += 1
                
@@ -160,7 +162,7 @@ def main():
 
         # Start a stream, using the local folder of the script and a time-stamp file name in this example
         fileName = time.strftime("%Y-%m-%d-%H-%M-%S", time.gmtime())        
-        myStream = myQpsDevice.startStream (filePath + fileName)
+        myStream = myQpsDevice.startStream (filePath + "\\" + fileName)
 
         # Create new custom channels to plot IO results
         myStream.createChannel ('I/O', 'IOPS', 'IOPS', "Yes")
@@ -175,8 +177,13 @@ def main():
 
         # Execute every ICF file in sequence and process them. Deletes any temporary ICF
         executeIometerFolderIteration (confDir, myStream, iometerCallbacks)
-        if "temp_conf" in confDir:
-            shutil.rmtree(confDir)
+        
+        # Deletes temporary files
+        try:
+            for tempFile in tempList:
+                os.remove(tempFile) 
+        except NameError:
+            pass
         
         # End the stream after a few seconds of idle
         time.sleep(5)
