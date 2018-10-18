@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 '''
-FLS2018 Demo
+FMS2018 Demo
 This example uses IOMeter and QPS to run traffic tests to a drive, with the power and performance data displayed.
 
-- The user is prompted to select n IOmeter target (Physical disk or drive letter)
+- The user is prompted to select an IOmeter target (Physical disk or drive letter)
 - The .conf files are IOmeter templates which are then turned into .icf files with the selected target in place
 - IOmeter is invoked over each .icf file in the folder whild QPS is used to display combined power and performance data
 
