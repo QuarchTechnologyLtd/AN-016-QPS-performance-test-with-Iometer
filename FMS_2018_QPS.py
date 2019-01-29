@@ -71,11 +71,7 @@ def main():
             "TEST_RESULT": notifyTestPoint,
         }
 
-        # Check that the installed version of quarchpy is at the required minimum level
-        if not requiredQuarchpyVersion ("1.3.4"):
-            raise ValueError ("quarchpy reported version is not new enough for this script!")
-
-        # Display title text
+          # Display title text
         print ("\n################################################################################")
         print ("\n                           QUARCH TECHNOLOGY                        \n\n  ")
         print ("Automated power and performance data acquisition with Quarch Power Studio.   ")
