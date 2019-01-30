@@ -10,7 +10,7 @@ This example uses IOMeter and QPS to run traffic tests to a drive, with the powe
 ########### VERSION HISTORY ###########
 
 27/06/2018 - Andy Norrie    - First version, based on initial work from Nikolas Ioannides
-02/08/2018 - Pedro Leao		- Updated to add nicer selection screens and IOmeter control
+02/08/2018 - Pedro Leao     - Updated to add nicer selection screens and IOmeter control
 
 ########### INSTRUCTIONS ###########
 
