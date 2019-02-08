@@ -269,11 +269,11 @@ Callback: Run for each test point to be added to the chart
 def notifyTestPoint (myStream, timeStamp, dataValues):
     # Add each custom data point that has been passed through
     # TODO: adjustTime should not be needed here!  All times in out python code should be standard python time stamps.  Any conversion should be done at source (reading from Iometer) or output (sendint the final command to the module)
-    if (dataValues.has_key ("IOPS")):
+    if "IOPS" in dataValues:
         myStream.addDataPoint('I/O', 'IOPS', dataValues["IOPS"], adjustTime(timeStamp))
-    if (dataValues.has_key ("DATA_RATE")):
+    if "DATA_RATE" in dataValues:
         myStream.addDataPoint('Data', 'Data', dataValues["DATA_RATE"], adjustTime(timeStamp))
-    if (dataValues.has_key ("RESPONSE_TIME")):
+    if "RESPONSE_TIME" in dataValues:
         myStream.addDataPoint('Response', 'Response', dataValues["RESPONSE_TIME"], adjustTime(timeStamp))    
 
 
