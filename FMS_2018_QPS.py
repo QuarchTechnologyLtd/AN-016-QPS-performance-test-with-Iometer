@@ -11,11 +11,13 @@ This example uses IOMeter and QPS to run traffic tests to a drive, with the powe
 
 27/06/2018 - Andy Norrie    - First version, based on initial work from Nikolas Ioannides
 02/08/2018 - Pedro Leao     - Updated to add nicer selection screens and IOmeter control
+28/03/2019 - Andy Norrie    - Updated for v1.9 of quarchpy, with improved import system
 
 ########### INSTRUCTIONS ###########
 
 1- Connect a Quarch power module to your PC via USB or LAN
-2- Install quarchpy, wmi (https://github.com/mhammond/pywin32/releases) and pywin32
+2- Install quarchpy, wmi and pywin32.
+   These can all be installed via pip
 3- On startup, select the drive you wish to test
 
 ####################################
@@ -53,7 +55,13 @@ except ImportError:
     # for Python 3.x
     from io import StringIO
 
-from quarchpy import generateIcfFromCsvLineData, readIcfCsvLineData, requiredQuarchpyVersion, generateIcfFromConf, quarchDevice, quarchQPS, isQpsRunning, startLocalQps, closeQPS, qpsInterface, GetDiskTargetSelection, GetQpsModuleSelection, runIOMeter, processIometerInstResults, adjustTime
+import quarchpy
+from quarchpy.device import *
+from quarchpy.qps import *
+from quarchpy.iometer import *
+from quarchpy.disk_test import getDiskTargetSelection
+
+#generateIcfFromCsvLineData, readIcfCsvLineData, requiredQuarchpyVersion, generateIcfFromConf, quarchDevice, quarchQPS, isQpsRunning, startLocalQps, closeQPS, qpsInterface, GetDiskTargetSelection, GetQpsModuleSelection, runIOMeter, processIometerInstResults, adjustTime
 
 filePath = os.path.dirname(os.path.realpath(__file__))
 
@@ -71,7 +79,10 @@ def main():
             "TEST_RESULT": notifyTestPoint,
         }
 
-          # Display title text
+        # Make sure quarchpy is up to date (min version required = 2.0.0)        
+        quarchpy.requiredQuarchpyVersion ("2.0.0")
+
+        # Display title text
         print ("\n################################################################################")
         print ("\n                           QUARCH TECHNOLOGY                        \n\n  ")
         print ("Automated power and performance data acquisition with Quarch Power Studio.   ")
@@ -105,6 +116,8 @@ def main():
         # Setup the voltage mode and enable the outputs
         setupPowerOutput (myQpsDevice)
         # Sleep for a few seconds to let the drive target enumerate
+        print("")
+        print ("Waiting for drives to enumerate...")
         time.sleep(5)
         
         '''
@@ -112,7 +125,7 @@ def main():
         Get the user to select a valid target drive
         *****
         '''
-        targetInfo = GetDiskTargetSelection ()               
+        targetInfo = getDiskTargetSelection (purpose="iometer")
         
         print ("\n TARGET DEVICE: " + targetInfo["NAME"])
         print (" VOLUME: " + targetInfo["DRIVE"])
@@ -126,6 +139,7 @@ def main():
         if "1" in run_option:
             keepReading = True
             count = 1
+            # The CSV data is used to generate .icf files for execution in this folder.  Make sure you delete any old files from here if you do not want to run them again
             confDir = os.getcwd() + "\\conf\\temp_conf"
             tempList = []
             while 1:
@@ -249,7 +263,7 @@ act on it in a custom way (generally adding it to the QPS chart)
 Callback: Run to add the start point of a test run.  Adds an annotation to the chart
 '''
 def notifyTestStart (myStream, timeStamp, testDescription):
-    myStream.addAnnotation(testDescription + "\\n TEST STARTED", adjustTime(timeStamp))
+    myStream.addAnnotation(testDescription + "\\n TEST STARTED", timeStamp)
 
 '''
 Callback: Run to add the end point of a test run.  Adds an annotation to the chart and 
@@ -257,11 +271,11 @@ ends the current block of performance data
 '''
 def notifyTestEnd (myStream, timeStamp, testName):
     # Add an end annotation
-    myStream.addAnnotation("END", adjustTime(timeStamp))
+    myStream.addAnnotation("END", timeStamp)
     # Terminate the sequence of user data just after the current time, to avoid spanning the chart across the idle area
-    myStream.addDataPoint('I/O', 'IOPS', "endSeq", adjustTime(timeStamp)+0.01)
-    myStream.addDataPoint('Data', 'Data', "endSeq", adjustTime(timeStamp)+0.01)
-    myStream.addDataPoint('Response', 'Response', "endSeq", adjustTime(timeStamp)+0.01)
+    myStream.addDataPoint('I/O', 'IOPS', "endSeq", timeStamp)
+    myStream.addDataPoint('Data', 'Data', "endSeq", timeStamp)
+    myStream.addDataPoint('Response', 'Response', "endSeq", timeStamp)
 
 '''
 Callback: Run for each test point to be added to the chart
@@ -270,11 +284,11 @@ def notifyTestPoint (myStream, timeStamp, dataValues):
     # Add each custom data point that has been passed through
     # TODO: adjustTime should not be needed here!  All times in out python code should be standard python time stamps.  Any conversion should be done at source (reading from Iometer) or output (sendint the final command to the module)
     if "IOPS" in dataValues:
-        myStream.addDataPoint('I/O', 'IOPS', dataValues["IOPS"], adjustTime(timeStamp))
+        myStream.addDataPoint('I/O', 'IOPS', dataValues["IOPS"], timeStamp)
     if "DATA_RATE" in dataValues:
-        myStream.addDataPoint('Data', 'Data', dataValues["DATA_RATE"], adjustTime(timeStamp))
+        myStream.addDataPoint('Data', 'Data', dataValues["DATA_RATE"], timeStamp)
     if "RESPONSE_TIME" in dataValues:
-        myStream.addDataPoint('Response', 'Response', dataValues["RESPONSE_TIME"], adjustTime(timeStamp))    
+        myStream.addDataPoint('Response', 'Response', dataValues["RESPONSE_TIME"], timeStamp)
 
 
 # Calling the main () function
