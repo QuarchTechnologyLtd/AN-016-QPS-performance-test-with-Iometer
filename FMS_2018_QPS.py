@@ -61,8 +61,6 @@ from quarchpy.qps import *
 from quarchpy.iometer import *
 from quarchpy.disk_test import getDiskTargetSelection
 
-#generateIcfFromCsvLineData, readIcfCsvLineData, requiredQuarchpyVersion, generateIcfFromConf, quarchDevice, quarchQPS, isQpsRunning, startLocalQps, closeQPS, qpsInterface, GetDiskTargetSelection, GetQpsModuleSelection, runIOMeter, processIometerInstResults, adjustTime
-
 filePath = os.path.dirname(os.path.realpath(__file__))
 
 '''
