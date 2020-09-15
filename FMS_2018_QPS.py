@@ -112,7 +112,9 @@ def main():
         print ("MODULE CONNECTED: \n" + myQpsDevice.sendCommand ("*idn?"))
 
         # Setup the voltage mode and enable the outputs
-        setupPowerOutput (myQpsDevice)
+        # Uncomment for modules that can perform power margining (XLC, HDPPM)
+        # setupPowerOutput (myQpsDevice)
+        
         # Sleep for a few seconds to let the drive target enumerate
         print("")
         print ("Waiting for drives to enumerate...")
