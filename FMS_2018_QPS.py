@@ -25,14 +25,9 @@ This example uses IOMeter and QPS to run traffic tests to a drive, with the powe
 
 # Import modules and packages.
 from __future__ import division
-from sys import argv
 
-import time
-import signal
-import datetime
-from time import mktime
 import multiprocessing as mp
-from multiprocessing import Pipe
+import time
 
 try:
     # for Python 2.x
@@ -42,11 +37,6 @@ except ImportError:
     import _thread
 
 import os
-import shutil
-
-import math
-import re
-import mmap
 
 try:
     # for Python 2.x
@@ -103,7 +93,7 @@ def main():
         myDeviceID = GetQpsModuleSelection (myQps)
 
         # Create a Quarch device connected via QPS
-        myQuarchDevice = quarchDevice (myDeviceID, ConType = "QPS")
+        myQuarchDevice = getQuarchDevice(myDeviceID, ConType = "QPS")
         # Upgrade Quarch device to QPS device
         myQpsDevice = quarchQPS(myQuarchDevice)
         myQpsDevice.openConnection()
