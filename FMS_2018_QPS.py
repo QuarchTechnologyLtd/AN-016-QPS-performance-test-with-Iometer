@@ -44,6 +44,7 @@ import multiprocessing as mp
 import time
 import os
 import sys
+from sys import platform
 
 try:
     # for Python 2.x
@@ -59,14 +60,15 @@ except ImportError:
     # for Python 3.x
     from io import StringIO
 
-try:
-    import wmi as newImport
-except ImportError:
-    raise ImportError("'wmi' module required, please install this")
-try:
-    import win32file, win32api
-except ImportError:
-    raise ImportError("'pywin32' module required, please install this")
+if platform == "win32":
+    try:
+        import wmi as newImport
+    except ImportError:
+        raise ImportError("'wmi' module required, please install this")
+    try:
+        import win32file, win32api
+    except ImportError:
+        raise ImportError("'pywin32' module required, please install this")
 
 import quarchpy
 from quarchpy.device import *
