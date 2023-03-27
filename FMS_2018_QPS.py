@@ -152,11 +152,14 @@ def main():
     print ("\n TARGET DEVICE: " + targetInfo["NAME"])
     print (" VOLUME: " + targetInfo["DRIVE"])
 
-    # Run from CSV settings or all the files in /conf
-    try:
-        run_option = raw_input ("\n1 - Use settings in CSV file\n2 - Run all files in /conf\n>>> Please select a mode: ")
-    except NameError:
-        run_option = input ("\n1 - Use settings in CSV file\n2 - Run all files in /conf\n>>> Please select a mode: ")
+
+    run_option = 0
+    while run_option not in ("1", "2"):
+        # Run from CSV settings or all the files in /conf
+        try:
+            run_option = raw_input ("\n1 - Use settings in CSV file\n2 - Run all files in /conf\n>>> Please select a mode: ")
+        except NameError:
+            run_option = input ("\n1 - Use settings in CSV file\n2 - Run all files in /conf\n>>> Please select a mode: ")
 
     tempList = []
     if "1" in run_option:
@@ -264,13 +267,18 @@ def executeIometerFolderIteration (confDir, myStream, userCallbacks):
         
     for file in os.listdir(confDir):
         if file.endswith(".icf"):
+
+            icfFilePath = os.path.join(confDir, file)
+            icfFilePath = "\"" + icfFilePath + "\""
+
+            # Change the current working directory to be inside /iometer in order to launch iometer program
+            cur_dir = os.getcwd()
+            os.chdir(os.path.join(os.getcwd(), "iometer"))
+
             try:
                 os.remove("insttestfile.csv")
             except OSError:
                 pass
-
-            icfFilePath = os.path.join(confDir, file)
-            icfFilePath = "\"" + icfFilePath + "\""
 
             # Start up IOmeter and the results parser
             threadIometer = mp.Process(target=runIOMeter, args = (icfFilePath,))
@@ -285,6 +293,9 @@ def executeIometerFolderIteration (confDir, myStream, userCallbacks):
             threadIometer.join()
 
             time.sleep(5)
+
+            # Change the directory back to the original directory
+            os.chdir(cur_dir)
          
 '''
 Function to check the output state of the module and prompt to select an output mode if not set already
