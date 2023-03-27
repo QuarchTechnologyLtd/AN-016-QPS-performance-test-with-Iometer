@@ -32,7 +32,11 @@ This example uses IOMeter and QPS to run traffic tests to a drive, with the powe
 ########### INSTRUCTIONS ###########
 
 1- Connect a Quarch power module to your PC via USB or LAN
-2- On startup, select the drive you wish to test
+2- On script startup, select the Quarch Power module you are streaming with from the table displayed.
+3- Next you will be prompted to select the Block device or the drive partition you wish to test.
+4- Next you'll select if you wish to run the script using the CSV tests or the tests inside '/conf'.
+5- Lastly, you will be asked to type an averaging rate for the Quarch Power Module. ( Note - This can
+   be left blank and the module will be set to 32k Averaging as a default )
 
 ####################################
 '''
